@@ -1,0 +1,25 @@
+const THEMES=[
+ ['terrain','◎','EARTH & ELEMENTS','大地的轮廓','#a65336','#faf5ec','#eee1cd'],
+ ['botanical','❧','ROOTS & GROWTH','草木之间','#56734c','#f6f7ed','#e3ead8'],
+ ['wildlife','◈','LIFE IN THE WILD','万物共生','#896b35','#fbf6e8','#efe3c5'],
+ ['orbital','✦','BEYOND THE EARTH','仰望星空','#74579b','#f5f2fa','#e6def1'],
+ ['notebook','▤','LEARN & DISCOVER','知识的一页','#97613f','#fbf7ef','#f0e5d1'],
+ ['blueprint','⌘','IDEAS INTO REALITY','灵感实验室','#477678','#f0f6f3','#dcebe6'],
+ ['archive','▥','TRACES OF HISTORY','时间留下的回声','#8b5542','#f8f1e6','#ebdcc7'],
+ ['letters','“”','WORDS CONNECT US','语言的形状','#97604c','#faf3ee','#f0e0d5'],
+ ['rhythm','♫','MOVE & PLAY','在节奏中前行','#b36635','#fcf5e9','#f6e2c5'],
+ ['material','▦','TEXTURE & FORM','触摸世界的质地','#7f6957','#f5f2ed','#e8e0d5'],
+ ['atelier','✧','STYLE & EXPRESSION','日常的美学','#9b5e69','#fcf3f3','#f0dfe1'],
+ ['table','◒','TASTE & NOURISH','一餐一味','#ae653d','#fff6eb','#f4e1c7'],
+ ['structure','▱','SPACE & PLACE','空间的秩序','#8c674b','#f9f5ef','#e9dfd0'],
+ ['journey','↗','ON THE WAY','下一站，远方','#56847c','#f1f7f1','#dfebe0'],
+ ['civic','⚑','NATIONS & GOVERNANCE','共同的疆域','#8e5446','#fbf3ec','#efddd0'],
+ ['exchange','↗','VALUE & CONNECTION','流动的价值','#607652','#f5f6ed','#e4e8d6'],
+ ['balance','⚖','RIGHTS & RULES','规则的尺度','#756149','#f7f3eb','#e8dfcd'],
+ ['resolve','◆','CONFLICT & COURAGE','意志与较量','#975440','#f8efe6','#e9d9c6'],
+ ['people','◉','PEOPLE & SOCIETY','彼此的角色','#a06556','#faf2ec','#eddcd2'],
+ ['motion','➝','ACT & RESPOND','行动的轨迹','#a46d32','#fcf7e9','#f0e5c9'],
+ ['wellbeing','♡','MIND & BODY','安放心与身体','#687e6c','#f4f7ef','#e3ebdd'],
+ ['time','◷','MOMENTS & SEASONS','把时间听见','#986a47','#fbf5ec','#efe2cf']
+];
+function applyTheme(n){const [key,icon,en,caption,accent,bg,surface]=THEMES[n];document.body.dataset.theme=key;document.documentElement.style.setProperty('--accent',accent);document.documentElement.style.setProperty('--bg',bg);document.documentElement.style.setProperty('--surface',surface);document.querySelector('.stamp').innerHTML=`<b>${icon}</b><span>${caption}</span>`;document.querySelector('header>span').textContent=en;}
