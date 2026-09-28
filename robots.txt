@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://daix74991-jpg.github.io/ielts-vocabulary/sitemap.xml
