@@ -26,9 +26,13 @@ run('toggleFavorite(words()[1])');assert.equal(run('playing'),false);assert.equa
 run('toggleFavorite(words()[0])');assert.equal(run('words().length'),0);assert.equal(document.getElementById('playAll').disabled,true);
 run('notebook=false;resetView()');
 let row=document.getElementById('words').children[0],body=row.children[1],wordButton=body.children[0],meaning=row.children[2];
-assert.equal(meaning.hidden,true);wordButton.onclick({stopPropagation(){}});assert.equal(meaning.hidden,false);wordButton.onclick({stopPropagation(){}});assert.equal(meaning.hidden,true);
+assert.equal(meaning.hidden,true);
+document.getElementById('accent').value='2';wordButton.onclick({stopPropagation(){}});assert.equal(run('playing'),true);assert.equal(run('index'),0);assert.match(run('audio.src'),/type=2$/);assert.equal(meaning.hidden,true,'clicking a word plays without toggling the translation');run('stop()');
+row.onclick({target:{closest:()=>null}});assert.equal(run('playing'),true,'clicking the row plays immediately');run('stop()');
+row.onclick({target:{closest:()=>({})}});assert.equal(run('playing'),false,'controls do not bubble into row playback');
+let meaningButton=row.children.find(e=>e.className==='meaning-toggle');meaningButton.onclick({stopPropagation(){}});assert.equal(meaning.hidden,false);meaningButton.onclick({stopPropagation(){}});assert.equal(meaning.hidden,true);assert.equal(run('playing'),false,'translation control never starts audio');
 document.getElementById('showMeanings').checked=true;document.getElementById('showMeanings').onchange();
-row=document.getElementById('words').children[0];body=row.children[1];assert.equal(row.children[2].hidden,false);body.children[0].onclick({stopPropagation(){}});assert.equal(row.children[2].hidden,true);
+row=document.getElementById('words').children[0];body=row.children[1];assert.equal(row.children[2].hidden,false);row.children.find(e=>e.className==='meaning-toggle').onclick({stopPropagation(){}});assert.equal(row.children[2].hidden,true);
 assert.equal(document.getElementById('words').children[1].children[2].hidden,false,'hiding one does not hide every translation');
 ctx.localStorage.setItem=()=>{throw Error('storage denied')};run('toggleFavorite(words()[0])');assert.match(document.getElementById('storageNote').textContent,/本次/);
-console.log('PASS: notebook ordering, persistence, sequential playback, removal during playback, empty controls, individual/global reveal, unavailable storage');
+console.log('PASS: direct word/row playback, selected accent, independent translation controls, notebook ordering, persistence, sequential playback, removal during playback, empty controls, unavailable storage');

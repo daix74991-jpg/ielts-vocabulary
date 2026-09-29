@@ -38,12 +38,13 @@ function render(){
   const b=document.createElement('button');b.className='wordname';b.textContent=w.word;
   const meaning=document.createElement('div');meaning.className='meaning';meaning.id='meaning-'+w.id.replace(':','-');
   meaning.dataset.meaningId=w.id;fillMeaning(meaning,w.id);
-  const sync=()=>{const visible=showMeanings?!concealed.has(w.id):revealed.has(w.id);meaning.hidden=!visible;b.setAttribute('aria-expanded',String(visible));};
+  const meaningToggle=document.createElement('button');meaningToggle.className='meaning-toggle';meaningToggle.setAttribute('aria-label',w.word+' 中文释义');meaningToggle.setAttribute('aria-controls',meaning.id);
+  const sync=()=>{const visible=showMeanings?!concealed.has(w.id):revealed.has(w.id);meaning.hidden=!visible;meaningToggle.setAttribute('aria-expanded',String(visible));meaningToggle.textContent=visible?'收起中文':'中文';};
   const reveal=()=>{if(showMeanings){concealed.has(w.id)?concealed.delete(w.id):concealed.add(w.id);sync();return;}revealed.has(w.id)?revealed.delete(w.id):revealed.add(w.id);sync()};
-  b.setAttribute('aria-controls',meaning.id);b.onclick=e=>{e.stopPropagation();reveal()};sync();body.append(b);row.append(body,meaning);
-  row.onclick=e=>{if(!e.target.closest('button'))reveal()};
+  b.onclick=e=>{e.stopPropagation();start(n,false)};meaningToggle.onclick=e=>{e.stopPropagation();reveal()};sync();body.append(b);row.append(body,meaning);
+  row.onclick=e=>{if(!e.target.closest('button'))start(n,false)};
   const star=document.createElement('button');star.className='star';star.textContent=favorites.has(w.id)?'★':'☆';star.setAttribute('aria-pressed',String(favorites.has(w.id)));star.setAttribute('aria-label',(favorites.has(w.id)?'移出单词本：':'加入单词本：')+w.word);star.onclick=e=>{e.stopPropagation();toggleFavorite(w)};row.append(star);
-  const p=document.createElement('span');p.className='page';p.textContent='p. '+w.page;row.append(p);
+  const p=document.createElement('span');p.className='page';p.textContent='p. '+w.page;row.append(p,meaningToggle);
   for(const [accent,label] of [['1','英音'],['2','美音']]){const v=document.createElement('button');v.className='voice';v.textContent='♪ '+label;v.setAttribute('aria-label',w.word+' '+label);v.onclick=e=>{e.stopPropagation();$('accent').value=accent;start(n,false)};row.append(v)}
   $('words').append(row)
  });
