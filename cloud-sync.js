@@ -6,11 +6,12 @@
  const message=text=>{el('cloudStatus').textContent=text};
  if(!config?.url||!config?.publicKey){message('邮箱同步尚未启用，目前星标只保存在这台设备。');return;}
  el('cloudPanel').hidden=false;
+ if(config.passwordRecoveryEnabled===false)el('forgotPassword').hidden=true;
  let client,sync,user=null,recovery=false;
  const authError=error=>{
   const code=error?.code||'';
   if(code==='invalid_credentials')return '邮箱或密码不正确，请重试。';
-  if(code==='email_not_confirmed')return '请先点击邮箱中的验证链接，然后登录。';
+  if(code==='email_not_confirmed')return '这是之前尚未完成验证的账号，请使用原邮箱和密码点击“注册账号”再试。';
   if(code==='over_email_send_rate_limit'||code==='over_request_rate_limit')return '操作过于频繁，请稍后再试。';
   if(code==='email_address_not_authorized')return '邮件发送服务尚未配置，暂时无法注册或找回密码。';
   if(code==='weak_password')return '密码强度不足，请使用至少 8 位的密码。';
@@ -44,7 +45,7 @@
   const {data,error}=await client.auth.getSession();if(error)throw error;sessionChanged('INITIAL_SESSION',data.session);
   const action=async(fn,success)=>{el('authForm').querySelectorAll('button').forEach(b=>b.disabled=true);try{const result=await fn();if(result.error)throw result.error;if(success)message(success)}catch(error){message(authError(error))}finally{el('authForm').querySelectorAll('button').forEach(b=>b.disabled=false)}};
   el('authForm').onsubmit=e=>{e.preventDefault();action(async()=>{const result=await client.auth.signInWithPassword({email:el('loginEmail').value.trim(),password:el('loginPassword').value});if(!result.error)el('loginPassword').value='';return result})};
-  el('registerAccount').onclick=()=>{if(!el('authForm').reportValidity())return;action(async()=>{const result=await client.auth.signUp({email:el('loginEmail').value.trim(),password:el('loginPassword').value,options:{emailRedirectTo:location.origin+location.pathname}});if(!result.error)el('loginPassword').value='';return result},'请检查邮箱，点击验证链接后再登录；若已注册可直接登录。')};
+  el('registerAccount').onclick=()=>{if(!el('authForm').reportValidity())return;action(async()=>{const result=await client.auth.signUp({email:el('loginEmail').value.trim(),password:el('loginPassword').value,options:{emailRedirectTo:location.origin+location.pathname}});if(!result.error){el('loginPassword').value='';if(result.data?.session)sessionChanged('SIGNED_IN',result.data.session);else message('请检查邮箱，点击验证链接后再登录；若已注册可直接登录。')}return result})};
   el('forgotPassword').onclick=()=>{if(!el('loginEmail').reportValidity())return;action(()=>client.auth.resetPasswordForEmail(el('loginEmail').value.trim(),{redirectTo:location.origin+location.pathname}),'如该邮箱可以接收重置邮件，请查看收件箱中的链接。')};
   el('signOut').onclick=async()=>{const {error}=await client.auth.signOut({scope:'local'});if(error)message(authError(error))};
   el('syncNow').onclick=()=>sync.sync();
