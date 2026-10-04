@@ -1,0 +1,13 @@
+{
+  "name": "ielts-vocabulary",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build:sync": "node build-sync.cjs",
+    "test": "node test-player.cjs && node test-sync.cjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.117.2",
+    "esbuild": "0.28.2"
+  }
+}

@@ -2,6 +2,7 @@ const $=id=>document.getElementById(id);
 let unit=0,index=0,playing=false,paused=false,sequential=false,played=0,epoch=0,timer=null,audio=null,pending=null;
 function stop(){epoch++;clearTimeout(timer);pending=null;if(audio){audio.onended=null;audio.onerror=null;audio.pause();}playing=false;paused=false;played=0;$('toggle').textContent='▶';}
 const favoriteKey='ielts-vocabulary.favorites.v1';
+let favoriteScope=favoriteKey;
 const entries=VOCAB.flatMap((u,c)=>u.words.map((w,n)=>({...w,id:c+':'+n,unit:c})));
 const validIds=new Set(entries.map(w=>w.id));
 let notebook=false,showMeanings=false;
@@ -10,9 +11,10 @@ let favorites=new Set();
 try{const saved=JSON.parse(localStorage.getItem(favoriteKey)||'[]');if(Array.isArray(saved))favorites=new Set(saved.filter(id=>validIds.has(id)));}catch{}
 function words(){return notebook?entries.filter(w=>favorites.has(w.id)):entries.filter(w=>w.unit===unit)}
 function resetView(){stop();index=0;render();$('current').textContent='选择一个单词';$('status').textContent='准备好就开始听吧'}
-function saveFavorites(){try{localStorage.setItem(favoriteKey,JSON.stringify([...favorites]));$('storageNote').textContent='星标已保存到当前浏览器';}catch{$('storageNote').textContent='浏览器禁止保存，星标仅在本次使用中保留';}}
+function saveFavorites(){try{localStorage.setItem(favoriteScope,JSON.stringify([...favorites]));$('storageNote').textContent=favoriteScope===favoriteKey?'星标已保存到当前浏览器':'星标已缓存，正在同步到账号';}catch{$('storageNote').textContent='浏览器禁止保存，星标仅在本次使用中保留';}}
 function toggleFavorite(w){
  favorites.has(w.id)?favorites.delete(w.id):favorites.add(w.id);saveFavorites();
+ window.vocabularyNotebook?.onChange?.(w.id,favorites.has(w.id));
  if(notebook){resetView();}else{const active=index;render();if(playing){$('word-'+active)?.classList.add('selected');status();}}
 }
 function fillMeaning(element,id){
@@ -58,7 +60,13 @@ function render(){
 }
 $('notebook').onclick=()=>{notebook=!notebook;resetView()};
 $('showMeanings').onchange=()=>{showMeanings=$('showMeanings').checked;revealed.clear();concealed.clear();render();if(playing){$('word-'+index)?.classList.add('selected');status()}};
-window.addEventListener('storage',e=>{if(e.key!==favoriteKey)return;try{const saved=JSON.parse(e.newValue||'[]');favorites=new Set(Array.isArray(saved)?saved.filter(id=>validIds.has(id)):[]);resetView()}catch{}});
+window.addEventListener('storage',e=>{if(e.key!==favoriteScope)return;try{const saved=JSON.parse(e.newValue||'[]');favorites=new Set(Array.isArray(saved)?saved.filter(id=>validIds.has(id)):[]);resetView()}catch{}});
+window.vocabularyNotebook={
+ onChange:null, validIds:[...validIds], read:()=>[...favorites],
+ switchAccount(uid){favoriteScope=uid?favoriteKey+'.account.'+uid:favoriteKey;try{const saved=JSON.parse(localStorage.getItem(favoriteScope)||'[]');favorites=new Set(Array.isArray(saved)?saved.filter(id=>validIds.has(id)):[])}catch{favorites=new Set()}resetView();return [...favorites]},
+ apply(ids){const next=new Set(ids.filter(id=>validIds.has(id)));if(next.size===favorites.size&&[...next].every(id=>favorites.has(id)))return;favorites=next;saveFavorites();if(notebook)resetView();else{render();if(playing){$('word-'+index)?.classList.add('selected');status()}}},
+ notice(message){$('storageNote').textContent=message;}
+};
 function status(){const limit=Number($('repeat').value);$('status').textContent=`${$('accent').value==='1'?'英式':'美式'} · 第 ${played+1}${limit?' / '+limit:''} 次${paused?' · 已暂停':''}`;$('position').textContent=`${index+1} / ${words().length}`;}
 function fail(message){stop();$('status').textContent=message;}
 function start(n,seq){stop();if(!words().length)return;index=n;sequential=seq;playing=true;document.querySelectorAll('.word.selected').forEach(e=>e.classList.remove('selected'));$('word-'+index)?.classList.add('selected');$('current').textContent=words()[index].word;$('toggle').textContent='Ⅱ';play(epoch);}
