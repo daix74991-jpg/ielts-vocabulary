@@ -5,11 +5,11 @@ const favoriteKey='ielts-vocabulary.favorites.v1';
 let favoriteScope=favoriteKey;
 const entries=VOCAB.flatMap((u,c)=>u.words.map((w,n)=>({...w,id:c+':'+n,unit:c})));
 const validIds=new Set(entries.map(w=>w.id));
-let notebook=false,showMeanings=false;
+let notebook=false,notebookUnit=null,showMeanings=false;
 const revealed=new Set(),concealed=new Set();
 let favorites=new Set();
 try{const saved=JSON.parse(localStorage.getItem(favoriteKey)||'[]');if(Array.isArray(saved))favorites=new Set(saved.filter(id=>validIds.has(id)));}catch{}
-function words(){return notebook?entries.filter(w=>favorites.has(w.id)):entries.filter(w=>w.unit===unit)}
+function words(){return notebook?entries.filter(w=>favorites.has(w.id)&&(notebookUnit===null||w.unit===notebookUnit)):entries.filter(w=>w.unit===unit)}
 function resetView(){stop();index=0;render();$('current').textContent='选择一个单词';$('status').textContent='准备好就开始听吧'}
 function saveFavorites(){try{localStorage.setItem(favoriteScope,JSON.stringify([...favorites]));$('storageNote').textContent=favoriteScope===favoriteKey?'星标已保存到当前浏览器':'星标已缓存，正在同步到账号';}catch{$('storageNote').textContent='浏览器禁止保存，星标仅在本次使用中保留';}}
 function toggleFavorite(w){
@@ -26,10 +26,17 @@ function fillMeaning(element,id){
 function render(){
  applyTheme(unit);
  $('favoriteCount').textContent=favorites.size;
- $('notebook').setAttribute('aria-pressed',String(notebook));
- $('units').innerHTML='';VOCAB.forEach((u,n)=>{const b=document.createElement('button');b.innerHTML='<span>'+String(n+1).padStart(2,'0')+'</span>'+u.name;b.className=!notebook&&n===unit?'active':'';b.setAttribute('aria-current',!notebook&&n===unit?'true':'false');b.onclick=()=>{unit=n;notebook=false;resetView()};$('units').append(b)});
- $('chapter').textContent=notebook?'MY VOCABULARY':'CHAPTER '+String(unit+1).padStart(2,'0');
- $('title').textContent=notebook?'我的单词本':VOCAB[unit].name;
+ $('notebook').setAttribute('aria-pressed',String(notebook&&notebookUnit===null));
+ const unitCounts=VOCAB.map(()=>0);for(const w of entries)if(favorites.has(w.id))unitCounts[w.unit]++;
+ $('unitNotebook').hidden=notebook;$('notebookFilterLabel').hidden=!notebook;$('backToUnit').hidden=!notebook;
+ $('unitNotebookName').textContent=VOCAB[unit].name+' · 单词本';$('unitFavoriteCount').textContent=unitCounts[unit];
+ $('notebookUnit').innerHTML='';
+ const allOption=document.createElement('option');allOption.value='all';allOption.textContent='全部收藏（'+favorites.size+'）';$('notebookUnit').append(allOption);
+ VOCAB.forEach((u,n)=>{const option=document.createElement('option');option.value=String(n);option.textContent=String(n+1).padStart(2,'0')+' '+u.name+'（'+unitCounts[n]+'）';$('notebookUnit').append(option)});
+ $('notebookUnit').value=notebookUnit===null?'all':String(notebookUnit);
+ $('units').innerHTML='';VOCAB.forEach((u,n)=>{const b=document.createElement('button');b.innerHTML='<span>'+String(n+1).padStart(2,'0')+'</span>'+u.name;b.className=!notebook&&n===unit?'active':'';b.setAttribute('aria-current',!notebook&&n===unit?'true':'false');b.onclick=()=>{unit=n;notebook=false;notebookUnit=null;resetView()};$('units').append(b)});
+ $('chapter').textContent=notebook?(notebookUnit===null?'MY VOCABULARY':'CHAPTER '+String(unit+1).padStart(2,'0')+' / MY VOCABULARY'):'CHAPTER '+String(unit+1).padStart(2,'0');
+ $('title').textContent=notebook?(notebookUnit===null?'我的单词本':VOCAB[unit].name+' · 单词本'):VOCAB[unit].name;
  $('count').textContent=words().length+' 个词条 · '+(notebook?'已加星标，按原书顺序':'按书中分类');
  $('listTitle').textContent=notebook?'星标单词':'单词列表';
  $('words').innerHTML='';
@@ -50,7 +57,7 @@ function render(){
   for(const [accent,label] of [['1','英音'],['2','美音']]){const v=document.createElement('button');v.className='voice';v.textContent='♪ '+label;v.setAttribute('aria-label',w.word+' '+label);v.onclick=e=>{e.stopPropagation();$('accent').value=accent;start(n,false)};row.append(v)}
   $('words').append(row)
  });
- if(!words().length){const empty=document.createElement('p');empty.className='empty-notebook';empty.textContent='还没有星标单词。到任意章节点击 ☆，就能在这里集中复习。';$('words').append(empty)}
+ if(!words().length){const empty=document.createElement('p');empty.className='empty-notebook';empty.textContent=notebookUnit===null?'还没有星标单词。到任意章节点击 ☆，就能在这里集中复习。':'这个单元还没有星标单词。点击“返回本单元”，给想复习的单词加上 ☆。';$('words').append(empty)}
  for(const id of ['playAll','toggle','prev','next'])$(id).disabled=!words().length;
  $('position').textContent='— / '+words().length;
  if(typeof loadMeanings==='function')for(const chapter of new Set(words().map(w=>w.unit))){
@@ -58,7 +65,10 @@ function render(){
  }
 
 }
-$('notebook').onclick=()=>{notebook=!notebook;resetView()};
+$('notebook').onclick=()=>{notebook=!(notebook&&notebookUnit===null);notebookUnit=null;resetView()};
+$('unitNotebook').onclick=()=>{notebook=true;notebookUnit=unit;resetView()};
+$('notebookUnit').onchange=()=>{const value=$('notebookUnit').value,n=Number(value);notebookUnit=value!=='all'&&Number.isInteger(n)&&n>=0&&n<VOCAB.length?n:null;if(notebookUnit!==null)unit=notebookUnit;notebook=true;resetView()};
+$('backToUnit').onclick=()=>{notebook=false;notebookUnit=null;resetView()};
 $('showMeanings').onchange=()=>{showMeanings=$('showMeanings').checked;revealed.clear();concealed.clear();render();if(playing){$('word-'+index)?.classList.add('selected');status()}};
 window.addEventListener('storage',e=>{if(e.key!==favoriteScope)return;try{const saved=JSON.parse(e.newValue||'[]');favorites=new Set(Array.isArray(saved)?saved.filter(id=>validIds.has(id)):[]);resetView()}catch{}});
 window.vocabularyNotebook={
@@ -77,6 +87,6 @@ for(const id of ['accent','repeat','gap','rate'])$(id).onchange=()=>{if(playing)
 window.addEventListener('pagehide',stop);render();
 if(document.modelContext?.registerTool){
  const lifecycle=new AbortController();
- try{Promise.resolve(document.modelContext.registerTool({name:'select_vocabulary_unit',description:'Switch to one of the 22 book units and display its words and theme. Stops current audio.',inputSchema:{type:'object',properties:{unit:{type:'integer',minimum:1,maximum:22}},required:['unit'],additionalProperties:false},execute(input){if(!input||!Number.isInteger(input.unit)||input.unit<1||input.unit>22)throw new Error('Unit must be an integer from 1 to 22');stop();unit=input.unit-1;notebook=false;index=0;render();$('current').textContent='选择一个单词';$('status').textContent='准备好就开始听吧';return {unit:unit+1,name:VOCAB[unit].name,wordCount:words().length}}},{signal:lifecycle.signal})).catch(()=>{});}catch{}
+ try{Promise.resolve(document.modelContext.registerTool({name:'select_vocabulary_unit',description:'Switch to one of the 22 book units and display its words and theme. Stops current audio.',inputSchema:{type:'object',properties:{unit:{type:'integer',minimum:1,maximum:22}},required:['unit'],additionalProperties:false},execute(input){if(!input||!Number.isInteger(input.unit)||input.unit<1||input.unit>22)throw new Error('Unit must be an integer from 1 to 22');stop();unit=input.unit-1;notebook=false;notebookUnit=null;index=0;render();$('current').textContent='选择一个单词';$('status').textContent='准备好就开始听吧';return {unit:unit+1,name:VOCAB[unit].name,wordCount:words().length}}},{signal:lifecycle.signal})).catch(()=>{});}catch{}
  window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
 }
