@@ -1,0 +1,24 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const prefix=fs.existsSync('dist/cloud-sync.js')?'dist/':'';
+const auth=require('./'+prefix+'auth-core.js');
+const source=fs.readFileSync(prefix+'cloud-sync.js','utf8').replace("await import('./supabase-client.js')",'window.testSDK');
+const flush=async()=>{for(let i=0;i<12;i++)await Promise.resolve()};
+(async()=>{
+ const elements=new Map(),buttons=[{disabled:false},{disabled:false}];
+ const el=id=>{if(!elements.has(id))elements.set(id,{textContent:'',value:'',hidden:false,querySelectorAll:()=>buttons,setAttribute(){},reportValidity:()=>true});return elements.get(id)};
+ let resolveLogin,resolveInitial,logins=0,signups=0,switched=[],attached=[];
+ const session={user:{id:'existing-id',email:'existing@example.invalid'}};
+ const client={auth:{onAuthStateChange(){},getSession:()=>new Promise(r=>resolveInitial=r),signInWithPassword:()=>{logins++;return new Promise(r=>resolveLogin=r)},signUp:async()=>{signups++;return {data:{session},error:null}}}};
+ const bridge={validIds:['0:0'],read:()=>['0:0'],switchAccount:id=>switched.push(id),apply(){},notice(){}};
+ const ctx={window:{NOTEBOOK_CLOUD_CONFIG:{url:'https://example.invalid',publicKey:'public',passwordRecoveryEnabled:false},NotebookAuth:auth,vocabularyNotebook:bridge,NotebookSync:class{constructor(o){this.o=o}attach(id,guests){attached.push({id,guests})}sync(){this.o.notice('已同步到账号')}},testSDK:{createClient:()=>client},fetch:async()=>({ok:true,json:async()=>({mailer_autoconfirm:true})}),addEventListener(){}},document:{getElementById:el,addEventListener(){}},localStorage:{getItem:()=>null,setItem(){}},location:{origin:'https://example.invalid',pathname:'/'},setTimeout,clearTimeout,setInterval(){}};
+ await vm.runInNewContext(source,ctx);
+ assert.equal(typeof el('authForm').onsubmit,'function','login handler binds while initial session request is still pending');
+ el('loginEmail').value='existing@example.invalid';el('loginPassword').value='test-password';
+ const submit=()=>el('authForm').onsubmit({preventDefault(){}});
+ submit();submit();assert.equal(logins,1,'double click sends only one login');assert.match(el('cloudStatus').textContent,/正在登录/);assert.ok(buttons.every(b=>b.disabled));
+ resolveLogin({error:{code:'email_not_confirmed'}});await flush();
+ assert.equal(signups,1);assert.deepEqual(switched,['existing-id']);assert.equal(attached[0].id,'existing-id');assert.equal(attached[0].guests[0],'0:0');
+ assert.equal(el('authForm').hidden,true);assert.equal(el('accountActions').hidden,false);assert.match(el('cloudSummary').textContent,/已登录/);assert.match(el('cloudStatus').textContent,/已登录/);assert.ok(buttons.every(b=>!b.disabled));
+ resolveInitial({data:{session:null},error:null});await flush();assert.equal(el('authForm').hidden,true,'late initial session result cannot log out the account');
+ console.log('PASS: slow session restore, immediate progress, duplicate submission guard, legacy login UI, preserved account/guest favorites, visible signed-in summary and stale initial-session response');
+})().catch(e=>{console.error(e);process.exitCode=1});

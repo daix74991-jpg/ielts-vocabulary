@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build:sync": "node build-sync.cjs",
-    "test": "node test-player.cjs && node test-sync.cjs"
+    "test": "node test-player.cjs && node test-sync.cjs && node test-auth.cjs && node test-audio.cjs && node test-login-ui.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.2",

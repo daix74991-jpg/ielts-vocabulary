@@ -8,26 +8,20 @@
  el('cloudPanel').hidden=false;
  if(config.passwordRecoveryEnabled===false)el('forgotPassword').hidden=true;
  let client,sync,user=null,recovery=false;
- const authError=error=>{
-  const code=error?.code||'';
-  if(code==='invalid_credentials')return '邮箱或密码不正确，请重试。';
-  if(code==='email_not_confirmed')return '这是之前尚未完成验证的账号，请使用原邮箱和密码点击“注册账号”再试。';
-  if(code==='over_email_send_rate_limit'||code==='over_request_rate_limit')return '操作过于频繁，请稍后再试。';
-  if(code==='email_address_not_authorized')return '邮件发送服务尚未配置，暂时无法注册或找回密码。';
-  if(code==='weak_password')return '密码强度不足，请使用至少 8 位的密码。';
-  if(code==='user_already_exists')return '该邮箱已注册，请登录或找回密码。';
-  return '连接或登录失败，请检查网络后重试。';
- };
+ const auth=window.NotebookAuth;
+ const authError=auth.errorMessage;
+ let busy=false,authAttempted=false;
+ const request=auth.timedFetch(window.fetch.bind(window));
  try{
   const {createClient}=await import('./supabase-client.js');
-  client=createClient(config.url,config.publicKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  client=createClient(config.url,config.publicKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true},global:{fetch:request}});
   let storage;try{storage=localStorage}catch{storage={getItem:()=>null,setItem:()=>{throw Error('storage denied')}}}
   sync=new window.NotebookSync({storage,validIds:bridge.validIds,
    read:async uid=>{
     const records={};for(let from=0;;from+=1000){const {data,error}=await client.from('vocabulary_favorites').select('word_id,starred').eq('user_id',uid).order('word_id').range(from,from+999);if(error)throw error;for(const row of data)records[row.word_id]=row.starred;if(data.length<1000)break;}return records;
    },
    write:async(uid,ops)=>{const rows=Object.entries(ops).map(([word_id,op])=>({user_id:uid,word_id,starred:op.starred}));const {error}=await client.from('vocabulary_favorites').upsert(rows,{onConflict:'user_id,word_id'});if(error)throw error},
-   show:ids=>bridge.apply(ids),notice:text=>{bridge.notice(text);message(text)}
+   show:ids=>bridge.apply(ids),notice:text=>{bridge.notice(text);message((user?'已登录 · ':'')+text)}
   });
   bridge.onChange=(id,starred)=>{if(user)sync.mark(id,starred)};
   function sessionChanged(event,session){
@@ -38,15 +32,42 @@
    bridge.switchAccount(user?.id);sync.attach(user?.id,guestIds);
    el('authForm').hidden=!!user;el('accountActions').hidden=!user;
    el('accountEmail').textContent=user?.email||'';
+   el('cloudSummary').textContent=user?'已登录 · '+user.email:'邮箱登录 · 同步单词本';
    if(user){message('登录成功，正在合并和同步单词本…');sync.sync()}
    else{recovery=false;el('newPasswordForm').hidden=true;el('newPassword').value='';message('未登录 · 星标仅保存在当前浏览器');bridge.notice('星标保存在当前浏览器')}
   }
   client.auth.onAuthStateChange((event,session)=>{setTimeout(()=>sessionChanged(event,session),0)});
-  const {data,error}=await client.auth.getSession();if(error)throw error;sessionChanged('INITIAL_SESSION',data.session);
-  const action=async(fn,success)=>{el('authForm').querySelectorAll('button').forEach(b=>b.disabled=true);try{const result=await fn();if(result.error)throw result.error;if(success)message(success)}catch(error){message(authError(error))}finally{el('authForm').querySelectorAll('button').forEach(b=>b.disabled=false)}};
-  el('authForm').onsubmit=e=>{e.preventDefault();action(async()=>{const result=await client.auth.signInWithPassword({email:el('loginEmail').value.trim(),password:el('loginPassword').value});if(!result.error)el('loginPassword').value='';return result})};
-  el('registerAccount').onclick=()=>{if(!el('authForm').reportValidity())return;action(async()=>{const result=await client.auth.signUp({email:el('loginEmail').value.trim(),password:el('loginPassword').value,options:{emailRedirectTo:location.origin+location.pathname}});if(!result.error){el('loginPassword').value='';if(result.data?.session)sessionChanged('SIGNED_IN',result.data.session);else message('请检查邮箱，点击验证链接后再登录；若已注册可直接登录。')}return result})};
-  el('forgotPassword').onclick=()=>{if(!el('loginEmail').reportValidity())return;action(()=>client.auth.resetPasswordForEmail(el('loginEmail').value.trim(),{redirectTo:location.origin+location.pathname}),'如该邮箱可以接收重置邮件，请查看收件箱中的链接。')};
+  const action=async(fn,loading,success)=>{
+   if(busy)return;busy=true;authAttempted=true;
+   const buttons=[...el('authForm').querySelectorAll('button')];
+   const loginButton=el('loginButton');
+   buttons.forEach(b=>b.disabled=true);el('authForm').setAttribute('aria-busy','true');
+   loginButton.textContent='请稍候…';message(loading);
+   try{const result=await fn();if(result.error)throw result.error;
+    if(result.data?.session)sessionChanged('SIGNED_IN',result.data.session);
+    if(success)message(success);
+   }catch(error){message(authError(error))}
+   finally{busy=false;buttons.forEach(b=>b.disabled=false);loginButton.textContent='登录';el('authForm').setAttribute('aria-busy','false')}
+  };
+  el('authForm').onsubmit=e=>{e.preventDefault();action(async()=>{
+   const credentials={email:el('loginEmail').value.trim(),password:el('loginPassword').value};
+   const result=await auth.signIn(client,credentials,config,request,()=>message('密码正确，正在处理旧账号的验证状态…'));
+   if(!result.error)el('loginPassword').value='';return result;
+  },'正在登录，请稍候…')};
+  el('registerAccount').onclick=()=>{if(!el('authForm').reportValidity())return;action(async()=>{
+   const result=await client.auth.signUp({email:el('loginEmail').value.trim(),password:el('loginPassword').value,options:{emailRedirectTo:location.origin+location.pathname}});
+   if(!result.error){el('loginPassword').value='';if(!result.data?.session)message('账号尚未登录。请检查邮箱验证要求，已有账号请使用原密码登录。')}
+   return result;
+  },'正在注册，请稍候…')};
+  // Bind controls before restoring a possibly expired session so a slow refresh
+  // cannot silently leave the login form without its event handlers.
+  message('正在检查登录状态…');
+  client.auth.getSession().then(({data,error})=>{
+   if(error){if(!user&&!busy&&!authAttempted)message(authError(error));return;}
+   if(data.session)sessionChanged('INITIAL_SESSION',data.session);
+   else if(!user&&!busy&&!authAttempted)message('未登录 · 星标仅保存在当前浏览器');
+  }).catch(error=>{if(!user&&!busy&&!authAttempted)message(authError(error))});
+  el('forgotPassword').onclick=()=>{if(!el('loginEmail').reportValidity())return;action(()=>client.auth.resetPasswordForEmail(el('loginEmail').value.trim(),{redirectTo:location.origin+location.pathname}),'正在发送邮件…','如该邮箱可以接收重置邮件，请查看收件箱中的链接。')};
   el('signOut').onclick=async()=>{const {error}=await client.auth.signOut({scope:'local'});if(error)message(authError(error))};
   el('syncNow').onclick=()=>sync.sync();
   el('newPasswordForm').onsubmit=async e=>{e.preventDefault();if(!recovery)return;const {error}=await client.auth.updateUser({password:el('newPassword').value});if(error)message(authError(error));else{el('newPassword').value='';el('newPasswordForm').hidden=true;recovery=false;message('密码已更新。')}};

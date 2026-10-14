@@ -6,6 +6,7 @@ const document={getElementById(id){if(!elements.has(id))elements.set(id,el());re
 const ctx=vm.createContext({document,window:{addEventListener(){}},console,Audio:class{constructor(src){audioInstances++;this.src=src;this.ended=false}set src(value){this._src=value;this.ended=false}get src(){return this._src}play(){return Promise.resolve()}pause(){}},setTimeout(fn){const id=++uid;queue.set(id,fn);return id},clearTimeout(id){queue.delete(id)},applyTheme(){}});
 vm.runInContext(fs.readFileSync(prefix+'words.js','utf8'),ctx);
 for(const [id,value] of Object.entries({repeat:'3',gap:'1000',accent:'1',rate:'1'}))document.getElementById(id).value=value;
+vm.runInContext(fs.readFileSync(prefix+'audio-player.js','utf8'),ctx);
 vm.runInContext(fs.readFileSync(prefix+'app.js','utf8'),ctx);
 const run=s=>vm.runInContext(s,ctx),tick=()=>{const item=queue.entries().next().value;assert.ok(item,'scheduled playback');queue.delete(item[0]);item[1]()},end=()=>run('audio.ended=true;audio.onended()');
 run('start(0,false)');for(let i=0;i<3;i++){end();if(i<2)tick()}assert.equal(run('playing'),false);assert.equal(queue.size,0);
@@ -13,7 +14,7 @@ document.getElementById('repeat').value='1';run('start(0,true)');end();run('togg
 run('start(0,true)');end();run('stop()');assert.equal(queue.size,0);assert.equal(run('playing'),false);
 document.getElementById('repeat').value='0';run('start(0,false)');for(let i=0;i<7;i++){end();tick()}assert.equal(run('index'),0);assert.equal(run('playing'),true);run('stop()');
 document.getElementById('repeat').value='1';document.getElementById('loop').checked=true;run('start(words().length-1,true)');end();tick();assert.equal(run('index'),0);run('stop()');
-run('start(0,false);audio.onerror()');assert.equal(run('playing'),false);assert.match(document.getElementById('status').textContent,/加载失败/);
+run('start(0,false);audio.onerror();audio.onerror()');assert.equal(run('playing'),false);assert.match(document.getElementById('status').textContent,/加载失败/);
 assert.equal(run('VOCAB.length'),22);assert.equal(run('VOCAB.reduce((s,u)=>s+u.words.length,0)'),3674);assert.equal(run('VOCAB[0].words.slice(0,6).map(w=>w.word).join(",")'),'atmosphere,hydrosphere,lithosphere,oxygen,oxide,carbon dioxide');
 assert.equal(audioInstances,1,'all repetitions and words reuse the user-activated audio element');
 console.log('PASS: repeat limits, infinite repeat, pause at boundary, cancellation, unit loop, errors, audio reuse, 22 units and first-page order');

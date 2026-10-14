@@ -1,6 +1,8 @@
 const $=id=>document.getElementById(id);
 let unit=0,index=0,playing=false,paused=false,sequential=false,played=0,epoch=0,timer=null,audio=null,pending=null;
-function stop(){epoch++;clearTimeout(timer);pending=null;if(audio){audio.onended=null;audio.onerror=null;audio.pause();}playing=false;paused=false;played=0;$('toggle').textContent='▶';}
+const voicePlayer=new window.WordAudioPlayer();
+let audioSource='recording';
+function stop(){epoch++;clearTimeout(timer);pending=null;voicePlayer.stop();playing=false;paused=false;played=0;$('toggle').textContent='▶';}
 const favoriteKey='ielts-vocabulary.favorites.v1';
 let favoriteScope=favoriteKey;
 const entries=VOCAB.flatMap((u,c)=>u.words.map((w,n)=>({...w,id:c+':'+n,unit:c})));
@@ -77,11 +79,31 @@ window.vocabularyNotebook={
  apply(ids){const next=new Set(ids.filter(id=>validIds.has(id)));if(next.size===favorites.size&&[...next].every(id=>favorites.has(id)))return;favorites=next;saveFavorites();if(notebook)resetView();else{render();if(playing){$('word-'+index)?.classList.add('selected');status()}}},
  notice(message){$('storageNote').textContent=message;}
 };
-function status(){const limit=Number($('repeat').value);$('status').textContent=`${$('accent').value==='1'?'英式':'美式'} · 第 ${played+1}${limit?' / '+limit:''} 次${paused?' · 已暂停':''}`;$('position').textContent=`${index+1} / ${words().length}`;}
+function status(){const limit=Number($('repeat').value);$('status').textContent=`${$('accent').value==='1'?'英式':'美式'} · 第 ${played+1}${limit?' / '+limit:''} 次${audioSource==='device'?' · 设备语音':''}${paused?' · 已暂停':''}`;$('position').textContent=`${index+1} / ${words().length}`;}
 function fail(message){stop();$('status').textContent=message;}
 function start(n,seq){stop();if(!words().length)return;index=n;sequential=seq;playing=true;document.querySelectorAll('.word.selected').forEach(e=>e.classList.remove('selected'));$('word-'+index)?.classList.add('selected');$('current').textContent=words()[index].word;$('toggle').textContent='Ⅱ';play(epoch);}
-function play(token){if(token!==epoch||!playing||paused)return;status();if(!audio){audio=new Audio();audio.preload='auto';}audio.src=`https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(words()[index].word)}&type=${$('accent').value}`;audio.playbackRate=Number($('rate').value);audio.onended=()=>{if(token!==epoch)return;played++;const max=Number($('repeat').value);if(max===0||played<max){pending=()=>play(token);timer=setTimeout(pending,Number($('gap').value));return}if(sequential&&(index<words().length-1||$('loop').checked)){pending=()=>{if(token===epoch)start((index+1)%words().length,true)};timer=setTimeout(pending,Number($('gap').value));return}stop();$('status').textContent='播放完成';};audio.onerror=()=>{if(token===epoch)fail('音频加载失败，请检查网络后重试')};audio.play().catch(e=>{if(token===epoch)fail(e.name==='NotAllowedError'?'请点击播放按钮继续':'音频暂不可用，请重试')});}
-function toggle(){if(!playing){start(index,false);return}if(paused){paused=false;$('toggle').textContent='Ⅱ';if(audio&&!audio.ended){audio.play().catch(()=>fail('请重试播放'))}else if(pending){const action=pending;pending=null;action()}else play(epoch)}else{paused=true;clearTimeout(timer);audio?.pause();$('toggle').textContent='▶'}status();}
+function play(token){
+ if(token!==epoch||!playing||paused)return;
+ audioSource='recording';status();
+ voicePlayer.play(words()[index].word,$('accent').value,Number($('rate').value),{
+  start:source=>{if(token!==epoch)return;audioSource=source;status()},
+  wait:message=>{if(token===epoch)$('status').textContent=message},
+  error:message=>{if(token===epoch)fail(message)},
+  end:()=>{
+   if(token!==epoch)return;played++;const max=Number($('repeat').value);
+   if(max===0||played<max)pending=()=>play(token);
+   else if(sequential&&(index<words().length-1||$('loop').checked))pending=()=>{if(token===epoch)start((index+1)%words().length,true)};
+   else{stop();$('status').textContent='播放完成';return}
+   timer=setTimeout(()=>{const action=pending;pending=null;action?.()},Number($('gap').value));
+  }
+ });
+ audio=voicePlayer.audio;
+}
+function toggle(){
+ if(!playing){start(index,false);return}
+ if(paused){paused=false;$('toggle').textContent='Ⅱ';if(pending){const action=pending;pending=null;action()}else if(!voicePlayer.resume())play(epoch)}
+ else{paused=true;clearTimeout(timer);voicePlayer.pause();$('toggle').textContent='▶'}status();
+}
 $('toggle').onclick=toggle;$('stop').onclick=()=>{stop();$('status').textContent='已停止'};$('prev').onclick=()=>start((index-1+words().length)%words().length,sequential);$('next').onclick=()=>start((index+1)%words().length,sequential);$('playAll').onclick=()=>start(0,true);
 for(const id of ['accent','repeat','gap','rate'])$(id).onchange=()=>{if(playing)start(index,sequential)};
 window.addEventListener('pagehide',stop);render();
