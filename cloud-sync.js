@@ -43,30 +43,37 @@
    const loginButton=el('loginButton');
    buttons.forEach(b=>b.disabled=true);el('authForm').setAttribute('aria-busy','true');
    loginButton.textContent='请稍候…';message(loading);
-   try{const result=await fn();if(result.error)throw result.error;
-    if(result.data?.session)sessionChanged('SIGNED_IN',result.data.session);
+   try{const result=await auth.deadline(fn);if(result.error)throw result.error;
+    if(result.data?.session){el('loginPassword').value='';sessionChanged('SIGNED_IN',result.data.session);}
     if(success)message(success);
    }catch(error){message(authError(error))}
    finally{busy=false;buttons.forEach(b=>b.disabled=false);loginButton.textContent='登录';el('authForm').setAttribute('aria-busy','false')}
   };
-  el('authForm').onsubmit=e=>{e.preventDefault();action(async()=>{
+  el('authForm').onsubmit=e=>{e.preventDefault();action(async signal=>{
    const credentials={email:el('loginEmail').value.trim(),password:el('loginPassword').value};
-   const result=await auth.signIn(client,credentials,config,request,()=>message('密码正确，正在处理旧账号的验证状态…'));
-   if(!result.error)el('loginPassword').value='';return result;
+   const result=await auth.signIn(client,credentials,config,request,()=>{if(!signal.aborted)message('密码正确，正在处理旧账号的验证状态…')},signal);
+   return result;
   },'正在登录，请稍候…')};
   el('registerAccount').onclick=()=>{if(!el('authForm').reportValidity())return;action(async()=>{
    const result=await client.auth.signUp({email:el('loginEmail').value.trim(),password:el('loginPassword').value,options:{emailRedirectTo:location.origin+location.pathname}});
-   if(!result.error){el('loginPassword').value='';if(!result.data?.session)message('账号尚未登录。请检查邮箱验证要求，已有账号请使用原密码登录。')}
+   if(!result.error){if(!result.data?.session)message('账号尚未登录。请检查邮箱验证要求，已有账号请使用原密码登录。')}
    return result;
   },'正在注册，请稍候…')};
   // Bind controls before restoring a possibly expired session so a slow refresh
   // cannot silently leave the login form without its event handlers.
   message('正在检查登录状态…');
-  client.auth.getSession().then(({data,error})=>{
+  auth.deadline(()=>client.auth.getSession(),15000).then(({data,error})=>{
    if(error){if(!user&&!busy&&!authAttempted)message(authError(error));return;}
    if(data.session)sessionChanged('INITIAL_SESSION',data.session);
    else if(!user&&!busy&&!authAttempted)message('未登录 · 星标仅保存在当前浏览器');
   }).catch(error=>{if(!user&&!busy&&!authAttempted)message(authError(error))});
+  el('checkConnection').onclick=async()=>{
+   const button=el('checkConnection');button.disabled=true;message('正在检查账号服务连接…');
+   try{const response=await request(config.url+'/auth/v1/settings',{headers:{apikey:config.publicKey}});if(!response.ok)throw Error('connection failed');
+    const settings=await response.json();message(user?'已登录 · 账号服务连接正常':'账号服务连接正常 · '+(settings.mailer_autoconfirm?'无需邮箱验证':'需要邮箱验证')+'。请使用原邮箱和密码登录。');
+   }catch{message('当前浏览器无法连接账号服务。请换一个网络后重试；不用重新注册，账号和单词本会保留。')}
+   finally{button.disabled=false}
+  };
   el('forgotPassword').onclick=()=>{if(!el('loginEmail').reportValidity())return;action(()=>client.auth.resetPasswordForEmail(el('loginEmail').value.trim(),{redirectTo:location.origin+location.pathname}),'正在发送邮件…','如该邮箱可以接收重置邮件，请查看收件箱中的链接。')};
   el('signOut').onclick=async()=>{const {error}=await client.auth.signOut({scope:'local'});if(error)message(authError(error))};
   el('syncNow').onclick=()=>sync.sync();

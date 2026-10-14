@@ -2,7 +2,7 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
 const prefix=fs.existsSync('dist/cloud-sync.js')?'dist/':'';
 const auth=require('./'+prefix+'auth-core.js');
 const source=fs.readFileSync(prefix+'cloud-sync.js','utf8').replace("await import('./supabase-client.js')",'window.testSDK');
-const flush=async()=>{for(let i=0;i<12;i++)await Promise.resolve()};
+const flush=()=>new Promise(setImmediate);
 (async()=>{
  const elements=new Map(),buttons=[{disabled:false},{disabled:false}];
  const el=id=>{if(!elements.has(id))elements.set(id,{textContent:'',value:'',hidden:false,querySelectorAll:()=>buttons,setAttribute(){},reportValidity:()=>true});return elements.get(id)};
@@ -15,10 +15,21 @@ const flush=async()=>{for(let i=0;i<12;i++)await Promise.resolve()};
  assert.equal(typeof el('authForm').onsubmit,'function','login handler binds while initial session request is still pending');
  el('loginEmail').value='existing@example.invalid';el('loginPassword').value='test-password';
  const submit=()=>el('authForm').onsubmit({preventDefault(){}});
- submit();submit();assert.equal(logins,1,'double click sends only one login');assert.match(el('cloudStatus').textContent,/正在登录/);assert.ok(buttons.every(b=>b.disabled));
+ submit();submit();await flush();assert.equal(logins,1,'double click sends only one login');assert.match(el('cloudStatus').textContent,/正在登录/);assert.ok(buttons.every(b=>b.disabled));
  resolveLogin({error:{code:'email_not_confirmed'}});await flush();
  assert.equal(signups,1);assert.deepEqual(switched,['existing-id']);assert.equal(attached[0].id,'existing-id');assert.equal(attached[0].guests[0],'0:0');
  assert.equal(el('authForm').hidden,true);assert.equal(el('accountActions').hidden,false);assert.match(el('cloudSummary').textContent,/已登录/);assert.match(el('cloudStatus').textContent,/已登录/);assert.ok(buttons.every(b=>!b.disabled));
  resolveInitial({data:{session:null},error:null});await flush();assert.equal(el('authForm').hidden,true,'late initial session result cannot log out the account');
+ // A genuinely unresolved SDK call must release the form without losing input.
+ elements.clear();const before=switched.length;
+ ctx.window.NotebookAuth={...auth,deadline:run=>auth.deadline(run,5)};
+ ctx.window.testSDK={createClient:()=>({auth:{onAuthStateChange(){},getSession:async()=>({data:{session:null}}),signInWithPassword:()=>new Promise(()=>{})}})};
+ await vm.runInNewContext(source,ctx);
+ el('loginEmail').value='existing@example.invalid';el('loginPassword').value='test-password';
+ el('authForm').onsubmit({preventDefault(){}});
+ await new Promise(r=>setTimeout(r,15));
+ assert.ok(buttons.every(b=>!b.disabled));assert.equal(el('loginButton').textContent,'登录');assert.match(el('cloudStatus').textContent,/等待超时/);
+ assert.equal(el('loginPassword').value,'test-password','timeout keeps the entered password for a user-controlled retry');
+ assert.equal(switched.length,before,'timeout never clears or switches favorite/account storage');
  console.log('PASS: slow session restore, immediate progress, duplicate submission guard, legacy login UI, preserved account/guest favorites, visible signed-in summary and stale initial-session response');
 })().catch(e=>{console.error(e);process.exitCode=1});
