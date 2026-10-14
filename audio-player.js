@@ -3,6 +3,9 @@
  class WordAudioPlayer{
   constructor({makeAudio=()=>new Audio(),speech=root.speechSynthesis,Utterance=root.SpeechSynthesisUtterance,delay=setTimeout,cancel=clearTimeout,timeout=5000}={}){
    Object.assign(this,{makeAudio,speech,Utterance,delay,cancel,timeout});this.audio=null;this.active=null;this.timer=null;this.serial=0;this.deviceUntil={};
+   // Window timers reject an arbitrary class instance as their receiver in
+   // some browsers. Call the injected functions without borrowing `this`.
+   this.delay=(...args)=>delay(...args);this.cancel=(...args)=>cancel(...args);
    try{speech?.getVoices()}catch{}
   }
   clearTimer(){this.cancel(this.timer);this.timer=null}

@@ -28,8 +28,8 @@
    if(event==='PASSWORD_RECOVERY'){recovery=true;el('cloudPanel').open=true;el('newPasswordForm').hidden=false;}
    const next=session?.user||null;
    if(next?.id===user?.id)return;
-   const guestIds=!user?bridge.read():[];user=next;
-   bridge.switchAccount(user?.id);sync.attach(user?.id,guestIds);
+   const guestIds=!user?bridge.read():[];
+   bridge.switchAccount(next?.id);user=next;sync.attach(user?.id,guestIds);
    el('authForm').hidden=!!user;el('accountActions').hidden=!user;
    el('accountEmail').textContent=user?.email||'';
    el('cloudSummary').textContent=user?'已登录 · '+user.email:'邮箱登录 · 同步单词本';

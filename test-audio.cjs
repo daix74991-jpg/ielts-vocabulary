@@ -21,3 +21,6 @@ h.player.stop();assert.equal(h.queue.size,0);assert.equal(h.player.active,null);
 h=harness();h.play();h.player.pause();assert.equal(h.queue.size,0,'pause suspends loading deadline');assert.equal(h.player.resume(),true);assert.equal(h.queue.size,1);h.player.stop();assert.equal(h.queue.size,0);
 h=harness([{lang:'en-GB',name:'UK'}]);h.play();h.tick();h.tick();assert.match(h.events.at(-1),/^error:/,'speech engine also has a deadline');
 console.log('PASS: buffered repetition, bounded loading/retry, exact UK/US fallback, fallback reuse, stale callbacks, stop, pause/resume and speech-engine timeout');
+const bound=new WordAudioPlayer({makeAudio:()=>h.audio,speech:null,delay:function(fn,ms){'use strict';assert.equal(this,undefined,'timer must not receive the audio player as its receiver');return 1},cancel:function(id){'use strict';assert.equal(this,undefined,'clearTimeout must not receive the audio player as its receiver')}});
+bound.play('oxygen','1',1,{wait(){},start(){},end(){},error(){}});bound.stop();
+console.log('PASS: receiver-sensitive browser timers during playback and account view reset');
